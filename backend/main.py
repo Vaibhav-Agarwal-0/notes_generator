@@ -2,7 +2,8 @@ from fastapi import FastAPI, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 import os
 from pathlib import Path
-from services.transcriber import transcribe_audio
+from backend.services.transcriber import transcribe_audio
+from backend.services.ocr import extract_text_and_figures
 
 app = FastAPI()
 
@@ -31,21 +32,19 @@ async def upload_file(file: UploadFile = File(...)):
     
     return {"filename": file.filename, "status": "transcribed", "transcript_preview": transcript[:300]}
 
-from services.ocr import extract_text_from_video
-
 @app.post("/upload-video/")
 async def upload_video(file: UploadFile = File(...)):
-    upload_path = Path("../data") / file.filename
-    with open(upload_path, "wb") as buffer:
-        buffer.write(await file.read())
+    upload_path = Path("data") / file.filename
+    with open(upload_path, "wb") as buf:
+        buf.write(await file.read())
 
-    ocr_text = extract_text_from_video(str(upload_path), frame_interval=60)
+    results = extract_text_and_figures(str(upload_path), frame_interval=60, output_dir="outputs/figures")
 
-    output_path = Path("../outputs") / f"{file.filename}_ocr.txt"
-    output_path.write_text(ocr_text, encoding='utf-8')
+    txt_path = Path("outputs") / f"{file.filename}_ocr.txt"
+    txt_path.write_text(results["text"], encoding="utf-8")
 
     return {
         "filename": file.filename,
         "status": "ocr_complete",
-        "ocr_preview": ocr_text[:300]
+        "ocr_preview": results["text"][:300]
     }
